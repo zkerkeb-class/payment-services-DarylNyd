@@ -8,6 +8,9 @@ const winston = require('winston');
 const expressWinston = require('express-winston');
 require('dotenv').config();
 const mongoose = require('mongoose');
+const promClient = require('prom-client');
+const register = promClient.register;
+promClient.collectDefaultMetrics({ register });
 
 const authMiddleware = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
@@ -131,6 +134,12 @@ app.get('/', (req, res) => {
         status: 'running',
         timestamp: new Date().toISOString()
     });
+});
+
+// Metrics route
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 // 404 handler
