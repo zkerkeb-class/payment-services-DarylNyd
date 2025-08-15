@@ -149,8 +149,8 @@ class PayPalService {
                         payer_selected: 'PAYPAL',
                         payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED'
                     },
-                    return_url: `${process.env.FRONTEND_URL}/dashboard?subscription=success`,
-                    cancel_url: `${process.env.FRONTEND_URL}/subscribe?cancelled=true`
+                    return_url: `${process.env.FRONTEND_URL}/payment/success?plan=${encodeURIComponent(plan.name)}`,
+                    cancel_url: `${process.env.FRONTEND_URL}/payment/failed?error=Payment cancelled by user`
                 }
             });
 

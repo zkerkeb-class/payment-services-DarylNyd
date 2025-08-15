@@ -132,14 +132,18 @@ router.post('/', authMiddleware, validateSubscription, async (req, res) => {
                         quantity: 1,
                     },
                 ],
-                success_url: process.env.FRONTEND_URL + '/dashboard/subscription?success=true',
-                cancel_url: process.env.FRONTEND_URL + '/dashboard/subscription?canceled=true',
+                success_url: process.env.FRONTEND_URL + '/payment/success?session_id={CHECKOUT_SESSION_ID}&plan=' + encodeURIComponent(plan.name),
+                cancel_url: process.env.FRONTEND_URL + '/payment/failed?error=Payment cancelled by user',
                 metadata: {
                     userId,
                     planId,
                     ...metadata
                 }
             });
+
+            logger.info(`Created Stripe checkout session: ${session.id}`);
+            logger.info(`Session metadata: userId=${userId}, planId=${planId}`);
+            logger.info(`Success URL: ${session.url}`);
 
             return res.json({
                 success: true,

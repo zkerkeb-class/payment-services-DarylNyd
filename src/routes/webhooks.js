@@ -10,6 +10,48 @@ const logger = winston.createLogger({
     transports: [new winston.transports.Console()]
 });
 
+// Test webhook endpoint (for development only)
+router.post('/test', async (req, res) => {
+    try {
+        const { userId, planId } = req.body;
+        
+        if (!userId || !planId) {
+            return res.status(400).json({ error: 'userId and planId are required' });
+        }
+        
+        logger.info(`Test webhook - updating user ${userId} to plan ${planId}`);
+        
+        // Update user's current plan in the authentication service
+        try {
+            const fetch = (await import('node-fetch')).default;
+            const response = await fetch(`http://localhost:5002/auth/users/${userId}/plan`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ planId })
+            });
+            
+            logger.info('Test PATCH response status:', response.status);
+            const responseBody = await response.text();
+            logger.info('Test PATCH response body:', responseBody);
+            
+            if (!response.ok) {
+                logger.error(`Failed to update user plan in auth service: ${response.status} ${response.statusText}`);
+                return res.status(500).json({ error: 'Failed to update user plan' });
+            } else {
+                logger.info(`User ${userId} plan updated to ${planId} in auth service.`);
+                return res.json({ success: true, message: `User ${userId} plan updated to ${planId}` });
+            }
+        } catch (err) {
+            logger.error('Test PATCH request failed:', err);
+            return res.status(500).json({ error: 'Failed to update user plan', details: err.message });
+        }
+        
+    } catch (error) {
+        logger.error('Error in test webhook:', error);
+        res.status(500).json({ error: 'Test webhook failed', details: error.message });
+    }
+});
+
 // Stripe webhook handler
 router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
     try {
@@ -45,6 +87,10 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
             
             case 'invoice.payment_failed':
                 await handleInvoicePaymentFailed(event.data.object);
+                break;
+            
+            case 'checkout.session.completed':
+                await handleCheckoutSessionCompleted(event.data.object);
                 break;
             
             case 'customer.subscription.created':
@@ -178,6 +224,47 @@ async function handleInvoicePaymentFailed(invoice) {
     }
 }
 
+async function handleCheckoutSessionCompleted(session) {
+    try {
+        logger.info(`Checkout session completed: ${session.id}`);
+        
+        // Extract metadata from the session
+        const userId = session.metadata && session.metadata.userId;
+        const planId = session.metadata && session.metadata.planId;
+        
+        logger.info(`Session metadata - userId: ${userId}, planId: ${planId}`);
+        
+        if (userId && planId) {
+            // Update user's current plan in the authentication service
+            try {
+                const fetch = (await import('node-fetch')).default;
+                const response = await fetch(`http://localhost:5002/auth/users/${userId}/plan`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ planId })
+                });
+                
+                logger.info('PATCH response status:', response.status);
+                const responseBody = await response.text();
+                logger.info('PATCH response body:', responseBody);
+                
+                if (!response.ok) {
+                    logger.error(`Failed to update user plan in auth service: ${response.status} ${response.statusText}`);
+                } else {
+                    logger.info(`User ${userId} plan updated to ${planId} in auth service.`);
+                }
+            } catch (err) {
+                logger.error('PATCH request failed:', err);
+            }
+        } else {
+            logger.warn('userId or planId missing in session metadata.');
+        }
+        
+    } catch (error) {
+        logger.error('Error handling checkout session completed:', error);
+    }
+}
+
 async function handleSubscriptionCreated(subscription) {
     try {
         logger.info('Stripe webhook event:', JSON.stringify(subscription, null, 2));
@@ -189,7 +276,7 @@ async function handleSubscriptionCreated(subscription) {
             // Update user's current plan in the authentication service
             try {
                 const fetch = (await import('node-fetch')).default;
-                const response = await fetch(`http://localhost:5002/api/auth/users/${userId}/plan`, {
+                const response = await fetch(`http://localhost:5002/auth/users/${userId}/plan`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ planId })
@@ -228,7 +315,7 @@ async function handleSubscriptionUpdated(subscription) {
             // Update user's current plan in the authentication service
             try {
                 const fetch = (await import('node-fetch')).default;
-                const response = await fetch(`http://localhost:5002/api/auth/users/${userId}/plan`, {
+                const response = await fetch(`http://localhost:5002/auth/users/${userId}/plan`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ planId })
